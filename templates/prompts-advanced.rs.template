@@ -1,0 +1,149 @@
+//! Advanced Prompts Implementation Template
+//!
+//! Demonstrates how to implement multiple prompts with different patterns:
+//! - Simple prompts with no arguments
+//! - Prompts with complex parameters
+//! - Prompts that use tool state
+//! - Prompts with multiple message types
+
+use rmcp::{
+    ErrorData as McpError,
+    RoleServer,
+    handler::server::wrapper::Parameters,
+    model::{GetPromptResult, PromptMessage, PromptMessageRole, PromptMessageContent},
+    prompt,
+    schemars,
+    service::RequestContext,
+};
+use serde::{Deserialize, Serialize};
+
+/// Simple prompt with no parameters
+#[prompt(name = "simple_guide")]
+pub async fn simple_guide_prompt() -> Result<GetPromptResult, McpError> {
+    Ok(GetPromptResult {
+        description: Some("A simple guide prompt".to_string()),
+        messages: vec![
+            PromptMessage::new_text(
+                PromptMessageRole::User,
+                "Please provide helpful guidance on using this tool.",
+            ),
+        ],
+    })
+}
+
+/// Parameters for a more complex prompt
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct AnalysisPromptArgs {
+    /// The topic or data to analyze
+    pub topic: String,
+
+    /// Level of detail: 'brief', 'detailed', or 'comprehensive'
+    #[serde(default)]
+    pub detail_level: String,
+
+    /// Optional context about the analysis
+    pub context: Option<String>,
+}
+
+/// Complex prompt with parameters and conditional logic
+#[prompt(name = "analysis")]
+pub async fn analysis_prompt(
+    Parameters(args): Parameters<AnalysisPromptArgs>,
+    _ctx: RequestContext<RoleServer>,
+) -> Result<GetPromptResult, McpError> {
+    let detail_instructions = match args.detail_level.as_str() {
+        "brief" => "Provide a concise summary (2-3 sentences)",
+        "comprehensive" => "Provide a detailed analysis with examples and edge cases",
+        _ => "Provide a balanced analysis",
+    };
+
+    let context_str = args
+        .context
+        .as_ref()
+        .map(|c| format!("\nContext: {}", c))
+        .unwrap_or_default();
+
+    let messages = vec![
+        PromptMessage::new_text(
+            PromptMessageRole::Assistant,
+            "I'll help you analyze this topic thoroughly.",
+        ),
+        PromptMessage::new_text(
+            PromptMessageRole::User,
+            format!(
+                "Please analyze: {}\n\n{}\n{}",
+                args.topic, detail_instructions, context_str
+            ),
+        ),
+    ];
+
+    Ok(GetPromptResult {
+        description: Some(format!("Analysis of: {}", args.topic)),
+        messages,
+    })
+}
+
+/// Parameters for structured problem-solving prompt
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct ProblemSolveArgs {
+    pub problem: String,
+    pub constraints: Vec<String>,
+}
+
+/// Multi-message prompt with system context
+#[prompt(name = "problem_solver")]
+pub async fn problem_solve_prompt(
+    Parameters(args): Parameters<ProblemSolveArgs>,
+    _ctx: RequestContext<RoleServer>,
+) -> Result<GetPromptResult, McpError> {
+    let constraints_text = if args.constraints.is_empty() {
+        "No specific constraints".to_string()
+    } else {
+        format!("Constraints:\n{}", args.constraints.join("\n"))
+    };
+
+    let messages = vec![
+        PromptMessage::new_text(
+            PromptMessageRole::Assistant,
+            "I'm a problem-solving assistant. I'll help you find the best solution.",
+        ),
+        PromptMessage::new_text(
+            PromptMessageRole::User,
+            format!("Problem: {}\n\n{}", args.problem, constraints_text),
+        ),
+        PromptMessage::new_text(
+            PromptMessageRole::Assistant,
+            "Let me work through this systematically:\n\n1. Understanding the problem\n2. Identifying potential solutions\n3. Evaluating trade-offs\n4. Recommending the best approach",
+        ),
+    ];
+
+    Ok(GetPromptResult {
+        description: Some("Step-by-step problem solving guide".to_string()),
+        messages,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_simple_guide() {
+        let result = simple_guide_prompt().await;
+        assert!(result.is_ok());
+        let prompt = result.unwrap();
+        assert!(!prompt.messages.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_analysis_prompt() {
+        let args = AnalysisPromptArgs {
+            topic: "Rust programming".to_string(),
+            detail_level: "detailed".to_string(),
+            context: Some("for beginners".to_string()),
+        };
+
+        let result = analysis_prompt(Parameters(args), _ctx).await;
+        assert!(result.is_ok());
+    }
+}

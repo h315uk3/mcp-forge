@@ -1,0 +1,99 @@
+[package]
+name = "{project_name}"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "{description}"
+license = "MIT"
+authors = ["Your Name <your.email@example.com>"]
+repository = "https://github.com/yourusername/{project_name}"
+homepage = "https://github.com/yourusername/{project_name}"
+documentation = "https://docs.rs/{project_name}"
+keywords = ["mcp", "server", "ai", "tools"]
+categories = ["development-tools", "api-bindings"]
+readme = "README.md"
+
+[lib]
+name = "{project_name_snake}"
+path = "src/lib.rs"
+
+[[bin]]
+name = "{project_name_snake}"
+path = "src/main.rs"
+
+[dependencies]
+# MCP Server Framework
+rmcp = { version = "0.8", features = ["server"] }
+
+# Async Runtime
+tokio = { version = "1.40", features = [
+    "rt-multi-thread",
+    "macros",
+    "io-std",
+    "io-util",
+    "sync",
+    "signal",
+] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging and Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "fmt",
+    "json",
+    "ansi",
+] }
+
+# Optional: Additional features (uncomment as needed)
+# async-trait = "0.1"          # For async traits
+# futures = "0.3"              # For futures utilities
+chrono = "0.4"               # For timestamp handling (used in resources)
+# uuid = { version = "1.0", features = ["v4", "serde"] }  # For unique identifiers
+# dashmap = "6.0"              # For concurrent hash maps
+# once_cell = "1.19"           # For lazy statics
+# config = "0.14"              # For configuration management
+# dotenv = "0.15"              # For environment variable loading
+
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = "0.5"              # For benchmarking
+proptest = "1.5"               # For property-based testing
+mockall = "0.13"               # For mocking
+
+[profile.dev]
+opt-level = 0
+debug = true
+debug-assertions = true
+overflow-checks = true
+incremental = true
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
+panic = "abort"
+
+[profile.test]
+opt-level = 1
+debug = true
+debug-assertions = true
+overflow-checks = true
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = false

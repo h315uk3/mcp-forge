@@ -1,0 +1,41 @@
+//! {project_name}
+//!
+//! {description}
+//!
+//! This is an MCP (Model Context Protocol) server implementation that provides
+//! tools and resources for AI assistants.
+//!
+//! # Architecture
+//!
+//! The server is structured into the following modules:
+//! - `server`: Main server implementation and configuration
+//! - `tools`: MCP tool implementations
+//! - `resources`: MCP resource implementations
+//! - `error`: Error types and handling
+//!
+//! # Example
+//!
+//! ```no_run
+//! use {project_name_snake}::server::create_server;
+//!
+//! #[tokio::main]
+//! async fn main() -> anyhow::Result<()> {
+//!     let server = create_server()?;
+//!     // Use the server...
+//!     Ok(())
+//! }
+//! ```
+
+#![warn(missing_docs)]
+#![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
+pub mod error;
+pub mod resources;
+pub mod server;
+pub mod tools;
+
+// Re-export commonly used types
+pub use error::{Error, Result};
+pub use server::ServerConfig;

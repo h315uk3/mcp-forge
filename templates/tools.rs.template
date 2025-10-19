@@ -1,0 +1,254 @@
+//! MCP tools implementation
+//!
+//! This module defines all tools that the server exposes to AI assistants.
+//! Each tool implements a specific capability that can be invoked by the client.
+
+use anyhow::Result;
+use rmcp::server::Server;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tracing::{debug, error, info};
+
+use crate::error::Error;
+
+/// Example tool input parameters
+///
+/// This struct defines the input parameters for the example tool.
+/// Use `#[serde(rename)]` to map JSON field names if needed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExampleToolInput {
+    /// Input text to process
+    pub text: String,
+
+    /// Optional parameter with default value
+    #[serde(default)]
+    pub uppercase: bool,
+}
+
+/// Example tool output
+///
+/// This struct defines the output format of the example tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExampleToolOutput {
+    /// Processed result
+    pub result: String,
+
+    /// Character count
+    pub char_count: usize,
+}
+
+/// Set up all tools for the MCP server
+///
+/// This function registers all available tools with the server.
+/// Each tool is registered with its name, description, and handler function.
+///
+/// # Example Tool
+///
+/// The example tool demonstrates basic tool structure:
+/// - Input validation
+/// - Error handling
+/// - Structured output
+///
+/// # Adding New Tools
+///
+/// To add a new tool:
+/// 1. Define input and output structs
+/// 2. Implement the tool handler function
+/// 3. Register the tool in this function
+pub fn setup_tools(mut server: Server) -> Result<Server> {
+    info!("Registering tools");
+
+    // Register the example tool
+    server = server
+        .add_tool(
+            "example_tool",
+            "Process text with optional transformations",
+            json!({
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "The text to process"
+                    },
+                    "uppercase": {
+                        "type": "boolean",
+                        "description": "Convert text to uppercase",
+                        "default": false
+                    }
+                },
+                "required": ["text"]
+            }),
+            |params: Value| async move {
+                handle_example_tool(params).await
+            },
+        )
+        .map_err(|e| Error::protocol(format!("Failed to register example_tool: {}", e)))?;
+
+    // Add more tools here following the same pattern
+    // server = server.add_tool(...)?;
+
+    info!("Tools registered successfully");
+    Ok(server)
+}
+
+/// Handler for the example tool
+///
+/// This function demonstrates best practices for tool implementation:
+/// - Parse and validate input parameters
+/// - Perform the operation with proper error handling
+/// - Return structured output
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Input parameters are invalid
+/// - Processing fails
+async fn handle_example_tool(params: Value) -> Result<Value, String> {
+    debug!("Executing example_tool with params: {:?}", params);
+
+    // Parse input parameters
+    let input: ExampleToolInput = serde_json::from_value(params).map_err(|e| {
+        error!("Failed to parse example_tool parameters: {}", e);
+        format!("Invalid parameters: {}", e)
+    })?;
+
+    // Validate input
+    if input.text.is_empty() {
+        return Err("Text parameter cannot be empty".to_string());
+    }
+
+    // Process the text
+    let result = if input.uppercase {
+        input.text.to_uppercase()
+    } else {
+        input.text.clone()
+    };
+
+    let char_count = result.chars().count();
+
+    // Create output
+    let output = ExampleToolOutput {
+        result,
+        char_count,
+    };
+
+    // Serialize to JSON
+    let json_output = serde_json::to_value(output).map_err(|e| {
+        error!("Failed to serialize example_tool output: {}", e);
+        format!("Failed to serialize output: {}", e)
+    })?;
+
+    debug!("example_tool completed successfully");
+    Ok(json_output)
+}
+
+// Example: Additional tool implementation
+//
+// /// Input parameters for another tool
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct AnotherToolInput {
+//     pub param1: String,
+//     pub param2: i32,
+// }
+//
+// /// Output for another tool
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct AnotherToolOutput {
+//     pub status: String,
+//     pub value: i32,
+// }
+//
+// /// Handler for another tool
+// async fn handle_another_tool(params: Value) -> Result<Value, String> {
+//     let input: AnotherToolInput = serde_json::from_value(params)
+//         .map_err(|e| format!("Invalid parameters: {}", e))?;
+//
+//     // Tool implementation here
+//     let output = AnotherToolOutput {
+//         status: "success".to_string(),
+//         value: input.param2 * 2,
+//     };
+//
+//     serde_json::to_value(output)
+//         .map_err(|e| format!("Failed to serialize output: {}", e))
+// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_example_tool_input_deserialization() {
+        let json = json!({
+            "text": "hello world",
+            "uppercase": true
+        });
+
+        let input: ExampleToolInput = serde_json::from_value(json).unwrap();
+        assert_eq!(input.text, "hello world");
+        assert!(input.uppercase);
+    }
+
+    #[test]
+    fn test_example_tool_input_default() {
+        let json = json!({
+            "text": "test"
+        });
+
+        let input: ExampleToolInput = serde_json::from_value(json).unwrap();
+        assert_eq!(input.text, "test");
+        assert!(!input.uppercase); // Default value
+    }
+
+    #[tokio::test]
+    async fn test_handle_example_tool_lowercase() {
+        let params = json!({
+            "text": "Test Text",
+            "uppercase": false
+        });
+
+        let result = handle_example_tool(params).await;
+        assert!(result.is_ok());
+
+        let output: ExampleToolOutput = serde_json::from_value(result.unwrap()).unwrap();
+        assert_eq!(output.result, "Test Text");
+        assert_eq!(output.char_count, 9);
+    }
+
+    #[tokio::test]
+    async fn test_handle_example_tool_uppercase() {
+        let params = json!({
+            "text": "test text",
+            "uppercase": true
+        });
+
+        let result = handle_example_tool(params).await;
+        assert!(result.is_ok());
+
+        let output: ExampleToolOutput = serde_json::from_value(result.unwrap()).unwrap();
+        assert_eq!(output.result, "TEST TEXT");
+        assert_eq!(output.char_count, 9);
+    }
+
+    #[tokio::test]
+    async fn test_handle_example_tool_empty_text() {
+        let params = json!({
+            "text": "",
+            "uppercase": false
+        });
+
+        let result = handle_example_tool(params).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_example_tool_invalid_params() {
+        let params = json!({
+            "invalid_field": "value"
+        });
+
+        let result = handle_example_tool(params).await;
+        assert!(result.is_err());
+    }
+}

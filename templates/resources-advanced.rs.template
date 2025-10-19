@@ -1,0 +1,188 @@
+//! Advanced Resources Implementation Template
+//!
+//! Demonstrates:
+//! - Text, binary, and JSON resources
+//! - Dynamic resource generation
+//! - Resource templates for parameterized access
+//! - Error handling for missing resources
+
+use rmcp::{
+    ErrorData as McpError,
+    RoleServer,
+    model::{
+        Resource, ResourceContents, ListResourcesResult, ReadResourceResult,
+        PaginatedRequestParam, ListResourceTemplatesResult, ResourceTemplate,
+    },
+    service::RequestContext,
+};
+use serde_json::{json, Value};
+use std::collections::HashMap;
+
+/// Simple text resource factory
+pub fn create_text_resource(uri: &str, name: &str, content: &str) -> Resource {
+    Resource {
+        uri: uri.to_string(),
+        name: name.to_string(),
+        description: None,
+        mime_type: Some("text/plain".to_string()),
+        annotations: Default::default(),
+    }
+}
+
+/// JSON resource factory
+pub fn create_json_resource(uri: &str, name: &str, data: Value) -> Resource {
+    Resource {
+        uri: uri.to_string(),
+        name: name.to_string(),
+        description: None,
+        mime_type: Some("application/json".to_string()),
+        annotations: Default::default(),
+    }
+}
+
+/// Binary resource factory (e.g., for base64-encoded data)
+pub fn create_binary_resource(uri: &str, name: &str) -> Resource {
+    Resource {
+        uri: uri.to_string(),
+        name: name.to_string(),
+        description: None,
+        mime_type: Some("application/octet-stream".to_string()),
+        annotations: Default::default(),
+    }
+}
+
+/// Resource provider with dynamic content generation
+pub struct ResourceProvider {
+    resources: HashMap<String, String>,
+}
+
+impl ResourceProvider {
+    pub fn new() -> Self {
+        let mut resources = HashMap::new();
+
+        // Add some sample resources
+        resources.insert(
+            "resource://config".to_string(),
+            "# Configuration\nThis is a sample config resource".to_string(),
+        );
+
+        resources.insert(
+            "resource://status".to_string(),
+            json!({
+                "status": "operational",
+                "uptime_hours": 42,
+                "version": "1.0.0"
+            }).to_string(),
+        );
+
+        Self { resources }
+    }
+
+    /// List all available resources
+    pub fn list_resources(&self) -> ListResourcesResult {
+        let resources = vec![
+            create_text_resource(
+                "resource://config",
+                "Configuration",
+                &self.resources.get("resource://config").cloned().unwrap_or_default(),
+            ),
+            create_json_resource(
+                "resource://status",
+                "System Status",
+                serde_json::from_str(&self.resources.get("resource://status").cloned().unwrap_or_default()).unwrap_or(json!({})),
+            ),
+        ];
+
+        ListResourcesResult {
+            resources,
+            next_cursor: None,
+        }
+    }
+
+    /// Read a specific resource
+    pub fn read_resource(&self, uri: &str) -> Result<ReadResourceResult, McpError> {
+        match uri {
+            "resource://config" => {
+                Ok(ReadResourceResult {
+                    contents: vec![ResourceContents::text(
+                        &self.resources.get(uri).cloned().unwrap_or_default(),
+                        uri,
+                    )],
+                })
+            }
+            "resource://status" => {
+                Ok(ReadResourceResult {
+                    contents: vec![ResourceContents::json(
+                        serde_json::from_str(
+                            &self.resources.get(uri).cloned().unwrap_or_default()
+                        ).unwrap_or(json!({})),
+                        uri,
+                    )],
+                })
+            }
+            _ => Err(McpError::resource_not_found(
+                "resource_not_found",
+                Some(json!({
+                    "uri": uri,
+                    "available_resources": self.resources.keys().collect::<Vec<_>>()
+                })),
+            )),
+        }
+    }
+
+    /// List resource templates for parameterized access
+    pub fn list_resource_templates(&self) -> ListResourceTemplatesResult {
+        ListResourceTemplatesResult {
+            resource_templates: vec![
+                ResourceTemplate {
+                    uri_template: "resource://file/{path}".to_string(),
+                    name: "File Resource".to_string(),
+                    description: Some("Access files by path".to_string()),
+                    mime_type: Some("text/plain".to_string()),
+                    annotations: Default::default(),
+                },
+                ResourceTemplate {
+                    uri_template: "resource://data/{id}".to_string(),
+                    name: "Data Resource".to_string(),
+                    description: Some("Access data by ID".to_string()),
+                    mime_type: Some("application/json".to_string()),
+                    annotations: Default::default(),
+                },
+            ],
+            next_cursor: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_resources() {
+        let provider = ResourceProvider::new();
+        let result = provider.list_resources();
+        assert!(!result.resources.is_empty());
+    }
+
+    #[test]
+    fn test_read_text_resource() {
+        let provider = ResourceProvider::new();
+        let result = provider.read_resource("resource://config");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_read_missing_resource() {
+        let provider = ResourceProvider::new();
+        let result = provider.read_resource("resource://missing");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resource_templates() {
+        let provider = ResourceProvider::new();
+        let templates = provider.list_resource_templates();
+        assert!(!templates.resource_templates.is_empty());
+    }
+}

@@ -1,0 +1,269 @@
+//! MCP resources implementation
+//!
+//! This module defines all resources that the server exposes to AI assistants.
+//! Resources represent data or content that can be accessed by the client.
+
+use anyhow::Result;
+use rmcp::server::Server;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use tracing::{debug, error, info};
+
+use crate::error::Error;
+
+/// Resource metadata
+///
+/// This struct contains metadata about a resource, including its URI,
+/// MIME type, and description.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceMetadata {
+    /// Resource URI
+    pub uri: String,
+
+    /// Resource name
+    pub name: String,
+
+    /// Resource description
+    pub description: String,
+
+    /// MIME type
+    pub mime_type: String,
+}
+
+/// Resource content
+///
+/// This struct represents the content of a resource along with its metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceContent {
+    /// Resource URI
+    pub uri: String,
+
+    /// MIME type
+    pub mime_type: String,
+
+    /// Content data
+    pub content: String,
+}
+
+/// Set up all resources for the MCP server
+///
+/// This function registers all available resources with the server.
+/// Resources can be:
+/// - Static content (e.g., documentation, configuration)
+/// - Dynamic content (e.g., generated reports, system status)
+/// - File-based content (e.g., files from a directory)
+///
+/// # Example Resource
+///
+/// The example resource demonstrates basic resource structure:
+/// - Resource metadata definition
+/// - Content generation
+/// - URI-based access
+///
+/// # Adding New Resources
+///
+/// To add a new resource:
+/// 1. Define resource metadata
+/// 2. Implement the resource handler function
+/// 3. Register the resource in this function
+pub fn setup_resources(mut server: Server) -> Result<Server> {
+    info!("Registering resources");
+
+    // Register the example resource
+    server = server
+        .add_resource(
+            "example://static/info",
+            "Example Static Resource",
+            "A static resource demonstrating basic functionality",
+            "text/plain",
+            |uri: String| async move {
+                handle_example_resource(uri).await
+            },
+        )
+        .map_err(|e| Error::protocol(format!("Failed to register example resource: {}", e)))?;
+
+    // Register a dynamic resource
+    server = server
+        .add_resource(
+            "example://dynamic/status",
+            "Server Status",
+            "Current server status and statistics",
+            "application/json",
+            |uri: String| async move {
+                handle_status_resource(uri).await
+            },
+        )
+        .map_err(|e| Error::protocol(format!("Failed to register status resource: {}", e)))?;
+
+    // Add more resources here following the same pattern
+    // server = server.add_resource(...)?;
+
+    info!("Resources registered successfully");
+    Ok(server)
+}
+
+/// Handler for the example static resource
+///
+/// This function demonstrates serving static content.
+///
+/// # Errors
+///
+/// Returns an error if the resource cannot be accessed.
+async fn handle_example_resource(uri: String) -> Result<String, String> {
+    debug!("Accessing example resource: {}", uri);
+
+    // In a real implementation, you might:
+    // - Read from a file
+    // - Query a database
+    // - Generate content dynamically
+
+    let content = format!(
+        "Example Resource\n\
+         ================\n\
+         \n\
+         URI: {}\n\
+         \n\
+         This is a static resource example.\n\
+         In a real implementation, this would contain actual content.",
+        uri
+    );
+
+    debug!("Example resource accessed successfully");
+    Ok(content)
+}
+
+/// Handler for the dynamic status resource
+///
+/// This function demonstrates serving dynamic content based on current server state.
+///
+/// # Errors
+///
+/// Returns an error if the resource cannot be generated.
+async fn handle_status_resource(uri: String) -> Result<String, String> {
+    debug!("Accessing status resource: {}", uri);
+
+    // Gather current server status
+    let status = json!({
+        "uri": uri,
+        "status": "running",
+        "uptime_seconds": get_uptime(),
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "version": env!("CARGO_PKG_VERSION"),
+    });
+
+    serde_json::to_string_pretty(&status).map_err(|e| {
+        error!("Failed to serialize status: {}", e);
+        format!("Failed to generate status: {}", e)
+    })
+}
+
+/// Get server uptime in seconds
+///
+/// This is a placeholder implementation. In a real server, you would
+/// track the actual start time and calculate the uptime.
+fn get_uptime() -> u64 {
+    // TODO: Implement actual uptime tracking
+    // This would typically involve storing the start time in a static variable
+    // or using a library like `uptime_lib`
+    0
+}
+
+// Example: File-based resource implementation
+//
+// /// Handler for file-based resources
+// async fn handle_file_resource(uri: String) -> Result<String, String> {
+//     debug!("Accessing file resource: {}", uri);
+//
+//     // Extract file path from URI
+//     let path = uri
+//         .strip_prefix("file://")
+//         .ok_or_else(|| "Invalid file URI".to_string())?;
+//
+//     // Read file content
+//     tokio::fs::read_to_string(path)
+//         .await
+//         .map_err(|e| format!("Failed to read file: {}", e))
+// }
+
+// Example: Database-backed resource implementation
+//
+// /// Handler for database-backed resources
+// async fn handle_database_resource(uri: String) -> Result<String, String> {
+//     debug!("Accessing database resource: {}", uri);
+//
+//     // Extract resource ID from URI
+//     let id = extract_resource_id(&uri)?;
+//
+//     // Query database
+//     // let content = database.query_resource(id).await?;
+//
+//     // For now, return a placeholder
+//     Ok(format!("Database resource content for ID: {}", id))
+// }
+//
+// fn extract_resource_id(uri: &str) -> Result<String, String> {
+//     uri.split('/')
+//         .last()
+//         .map(String::from)
+//         .ok_or_else(|| "Invalid resource URI".to_string())
+// }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_handle_example_resource() {
+        let uri = "example://static/info".to_string();
+        let result = handle_example_resource(uri.clone()).await;
+
+        assert!(result.is_ok());
+        let content = result.unwrap();
+        assert!(content.contains("Example Resource"));
+        assert!(content.contains(&uri));
+    }
+
+    #[tokio::test]
+    async fn test_handle_status_resource() {
+        let uri = "example://dynamic/status".to_string();
+        let result = handle_status_resource(uri.clone()).await;
+
+        assert!(result.is_ok());
+        let content = result.unwrap();
+
+        // Parse JSON to verify structure
+        let status: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(status["uri"], uri);
+        assert_eq!(status["status"], "running");
+        assert!(status["version"].is_string());
+        assert!(status["timestamp"].is_string());
+    }
+
+    #[test]
+    fn test_resource_metadata_creation() {
+        let metadata = ResourceMetadata {
+            uri: "test://resource".to_string(),
+            name: "Test Resource".to_string(),
+            description: "A test resource".to_string(),
+            mime_type: "text/plain".to_string(),
+        };
+
+        assert_eq!(metadata.uri, "test://resource");
+        assert_eq!(metadata.name, "Test Resource");
+        assert_eq!(metadata.mime_type, "text/plain");
+    }
+
+    #[test]
+    fn test_resource_content_serialization() {
+        let content = ResourceContent {
+            uri: "test://resource".to_string(),
+            mime_type: "text/plain".to_string(),
+            content: "Test content".to_string(),
+        };
+
+        let json = serde_json::to_value(&content).unwrap();
+        assert_eq!(json["uri"], "test://resource");
+        assert_eq!(json["mime_type"], "text/plain");
+        assert_eq!(json["content"], "Test content");
+    }
+}

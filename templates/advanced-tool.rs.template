@@ -1,0 +1,144 @@
+//! Advanced Tool Implementation Template
+//!
+//! This template demonstrates a more complex tool with:
+//! - Error handling using Result types
+//! - Async operations
+//! - Complex parameter structures
+//! - Multiple output formats
+
+use anyhow::Result;
+use rmcp::{
+    ErrorData as McpError,
+    handler::server::wrapper::Parameters,
+    model::{CallToolResult, Content},
+    schemars, tool,
+};
+use serde::{Deserialize, Serialize};
+
+/// Input parameters for the advanced tool
+/// 
+/// Use schemars attributes for JSON Schema generation
+/// which helps clients understand the tool's interface
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct {tool_name_pascal}Request {
+    /// Required parameter with description
+    #[schemars(description = "Primary input parameter")]
+    pub input: String,
+
+    /// Optional parameter
+    #[schemars(description = "Optional configuration")]
+    pub config: Option<String>,
+
+    /// Numeric parameter with constraints
+    #[schemars(description = "Value between 1 and 100")]
+    pub threshold: u32,
+}
+
+/// Output structure for typed responses
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct {tool_name_pascal}Response {
+    pub result: String,
+    pub confidence: f64,
+    pub processing_time_ms: u64,
+}
+
+/// Example tool handler
+pub async fn handle_{tool_name_snake}(
+    Parameters(request): Parameters<{tool_name_pascal}Request>,
+) -> Result<CallToolResult, McpError> {
+    let start = std::time::Instant::now();
+
+    // Input validation
+    if request.input.is_empty() {
+        return Err(McpError::invalid_params(
+            "input_empty",
+            Some("Input parameter cannot be empty".into()),
+        ));
+    }
+
+    if request.threshold > 100 {
+        return Err(McpError::invalid_params(
+            "threshold_out_of_range",
+            Some("Threshold must be between 1 and 100".into()),
+        ));
+    }
+
+    // Main processing logic
+    let result = {tool_name_snake}_processing(&request).await?;
+
+    let processing_time_ms = start.elapsed().as_millis() as u64;
+    let response = {tool_name_pascal}Response {
+        result,
+        confidence: 0.95,
+        processing_time_ms,
+    };
+
+    // Return JSON-formatted response
+    Ok(CallToolResult::success(vec![Content::json(response)?]))
+}
+
+/// Async helper function for the main processing
+async fn {tool_name_snake}_processing(
+    request: &{tool_name_pascal}Request,
+) -> Result<String, McpError> {
+    // Simulate async work (e.g., I/O, network calls)
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+    let config = request
+        .config
+        .as_ref()
+        .map(|c| c.as_str())
+        .unwrap_or("default");
+
+    Ok(format!(
+        "Processed '{}' with config '{}' and threshold {}",
+        request.input, config, request.threshold
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_{tool_name_snake}_valid_input() {
+        let request = {tool_name_pascal}Request {
+            input: "test input".to_string(),
+            config: Some("test_config".to_string()),
+            threshold: 50,
+        };
+
+        let result = handle_{tool_name_snake}(Parameters(request))
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_{tool_name_snake}_empty_input() {
+        let request = {tool_name_pascal}Request {
+            input: String::new(),
+            config: None,
+            threshold: 50,
+        };
+
+        let result = handle_{tool_name_snake}(Parameters(request))
+            .await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_{tool_name_snake}_threshold_validation() {
+        let request = {tool_name_pascal}Request {
+            input: "test".to_string(),
+            config: None,
+            threshold: 150,
+        };
+
+        let result = handle_{tool_name_snake}(Parameters(request))
+            .await;
+
+        assert!(result.is_err());
+    }
+}

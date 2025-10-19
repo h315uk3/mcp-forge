@@ -1,0 +1,33 @@
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Development
+*.log
+.env
+.env.local
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+
+# Distribution
+dist/
+build/
+
+# Claude & MCP personal configuration
+.claude/
+.mcp.json
+test_project

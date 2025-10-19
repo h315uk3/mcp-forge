@@ -1,0 +1,163 @@
+//! Error types for the MCP server
+//!
+//! This module defines custom error types using `thiserror` for better error handling
+//! and error context propagation throughout the application.
+
+use std::fmt;
+use thiserror::Error;
+
+/// Result type alias for operations that may fail with our custom Error type
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Main error type for the MCP server
+///
+/// This enum represents all possible error conditions that can occur in the server.
+/// Each variant provides specific context about what went wrong.
+#[derive(Error, Debug)]
+pub enum Error {
+    /// I/O error occurred
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// JSON serialization/deserialization error
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// MCP protocol error
+    #[error("MCP protocol error: {0}")]
+    Protocol(String),
+
+    /// Tool execution error
+    #[error("Tool execution error: {tool}: {message}")]
+    ToolExecution {
+        /// Name of the tool that failed
+        tool: String,
+        /// Error message
+        message: String,
+    },
+
+    /// Resource access error
+    #[error("Resource error: {resource}: {message}")]
+    Resource {
+        /// Resource identifier
+        resource: String,
+        /// Error message
+        message: String,
+    },
+
+    /// Configuration error
+    #[error("Configuration error: {0}")]
+    Config(String),
+
+    /// Invalid parameter error
+    #[error("Invalid parameter '{parameter}': {message}")]
+    InvalidParameter {
+        /// Name of the invalid parameter
+        parameter: String,
+        /// Description of why it's invalid
+        message: String,
+    },
+
+    /// Resource not found error
+    #[error("Resource not found: {0}")]
+    NotFound(String),
+
+    /// Permission denied error
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
+
+    /// Generic error with custom message
+    #[error("{0}")]
+    Custom(String),
+
+    /// Error from anyhow for better error context
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+impl Error {
+    /// Create a new protocol error
+    pub fn protocol(msg: impl Into<String>) -> Self {
+        Self::Protocol(msg.into())
+    }
+
+    /// Create a new tool execution error
+    pub fn tool_execution(tool: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::ToolExecution {
+            tool: tool.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a new resource error
+    pub fn resource(resource: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::Resource {
+            resource: resource.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a new configuration error
+    pub fn config(msg: impl Into<String>) -> Self {
+        Self::Config(msg.into())
+    }
+
+    /// Create a new invalid parameter error
+    pub fn invalid_parameter(parameter: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::InvalidParameter {
+            parameter: parameter.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a new not found error
+    pub fn not_found(msg: impl Into<String>) -> Self {
+        Self::NotFound(msg.into())
+    }
+
+    /// Create a new permission denied error
+    pub fn permission_denied(msg: impl Into<String>) -> Self {
+        Self::PermissionDenied(msg.into())
+    }
+
+    /// Create a new custom error
+    pub fn custom(msg: impl Into<String>) -> Self {
+        Self::Custom(msg.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_creation() {
+        let err = Error::protocol("test protocol error");
+        assert_eq!(err.to_string(), "MCP protocol error: test protocol error");
+
+        let err = Error::tool_execution("my_tool", "execution failed");
+        assert_eq!(
+            err.to_string(),
+            "Tool execution error: my_tool: execution failed"
+        );
+
+        let err = Error::not_found("resource.txt");
+        assert_eq!(err.to_string(), "Resource not found: resource.txt");
+    }
+
+    #[test]
+    fn test_error_from_io() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err: Error = io_err.into();
+        assert!(matches!(err, Error::Io(_)));
+    }
+
+    #[test]
+    fn test_error_display() {
+        let err = Error::invalid_parameter("timeout", "must be positive");
+        let display = format!("{}", err);
+        assert!(display.contains("Invalid parameter"));
+        assert!(display.contains("timeout"));
+        assert!(display.contains("must be positive"));
+    }
+}

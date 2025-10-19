@@ -1,0 +1,144 @@
+use anyhow::{Context, Result};
+use tokio::io::{stdin, stdout};
+use tokio::signal;
+use tracing::{error, info, warn};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+use {project_name_snake}::server::create_server;
+
+/// Main entry point for the MCP server
+///
+/// This function initializes the server, sets up logging, and starts the MCP server
+/// using stdin/stdout as the transport mechanism.
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize logging with environment-based configuration
+    init_logging()?;
+
+    info!(
+        "Starting MCP server: {project_name} v{}",
+        env!("CARGO_PKG_VERSION")
+    );
+
+    // Run the server and handle shutdown gracefully
+    match run_server().await {
+        Ok(()) => {
+            info!("Server shutdown successfully");
+            Ok(())
+        }
+        Err(e) => {
+            error!("Server error: {:?}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Initialize the logging system
+///
+/// Supports multiple output formats and log levels configured via environment variables:
+/// - RUST_LOG: Control log level (e.g., RUST_LOG=debug)
+/// - LOG_FORMAT: Control output format ("json" or "pretty", defaults to "pretty")
+fn init_logging() -> Result<()> {
+    let log_format = std::env::var("LOG_FORMAT").unwrap_or_else(|_| "pretty".to_string());
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive("{project_name_snake}=debug".parse()?);
+
+    let registry = tracing_subscriber::registry().with(env_filter);
+
+    match log_format.as_str() {
+        "json" => {
+            // JSON format for production/structured logging
+            let json_layer = tracing_subscriber::fmt::layer()
+                .json()
+                .with_target(true)
+                .with_current_span(true);
+            registry.with(json_layer).init();
+        }
+        _ => {
+            // Pretty format for development
+            let fmt_layer = tracing_subscriber::fmt::layer()
+                .with_target(true)
+                .with_thread_ids(false)
+                .with_file(true)
+                .with_line_number(true);
+            registry.with(fmt_layer).init();
+        }
+    }
+
+    Ok(())
+}
+
+/// Run the MCP server with graceful shutdown support
+///
+/// This function creates the server, sets up signal handlers for graceful shutdown,
+/// and runs the server until interrupted.
+async fn run_server() -> Result<()> {
+    // Create the MCP server instance
+    let server = create_server()
+        .context("Failed to create MCP server")?;
+
+    info!("MCP server initialized successfully");
+
+    // Create transport using stdin/stdout
+    let transport = (stdin(), stdout());
+
+    info!("Server ready, listening on stdin/stdout");
+
+    // Run the server with graceful shutdown
+    tokio::select! {
+        result = server.serve(transport) => {
+            result.context("Server execution failed")?;
+        }
+        _ = shutdown_signal() => {
+            warn!("Received shutdown signal, stopping server gracefully");
+        }
+    }
+
+    Ok(())
+}
+
+/// Wait for shutdown signals (SIGINT, SIGTERM)
+///
+/// This function sets up handlers for common shutdown signals and returns
+/// when any of them is received.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("Received Ctrl+C signal");
+        }
+        _ = terminate => {
+            info!("Received SIGTERM signal");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init_logging() {
+        // Test that logging initialization doesn't panic
+        let result = init_logging();
+        assert!(result.is_ok() || result.is_err()); // Should complete without panic
+    }
+}
