@@ -1,6 +1,6 @@
 use anyhow::Result;
 use mcp_forge::MCPForgeServer;
-use rmcp::{ServiceExt};
+use rmcp::ServiceExt;
 use std::env;
 use tracing_subscriber::{self, EnvFilter};
 
@@ -8,9 +8,7 @@ use tracing_subscriber::{self, EnvFilter};
 async fn main() -> Result<()> {
     // Initialize logging (write to stderr so stdout is clean for MCP messages)
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()),
-        )
+        .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
         .with_writer(std::io::stderr)
         .with_ansi(false)
         .init();

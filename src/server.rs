@@ -3,12 +3,8 @@
 //! Main server implementation that provides tools and resources for MCP development.
 
 use crate::tool_executor;
-use rmcp::{
-    ServerHandler,
-    model::*,
-    service::RequestContext,
-};
-use std::{sync::Arc, borrow::Cow};
+use rmcp::{ServerHandler, model::*, service::RequestContext};
+use std::{borrow::Cow, sync::Arc};
 
 /// MCP Forge Server implementation
 ///
@@ -100,7 +96,7 @@ impl ServerHandler for MCPForgeServer {
             })
             .collect();
 
-        Ok(ListToolsResult { 
+        Ok(ListToolsResult {
             tools,
             next_cursor: None,
         })
@@ -132,7 +128,7 @@ impl ServerHandler for MCPForgeServer {
             })
             .collect();
 
-        Ok(ListResourcesResult { 
+        Ok(ListResourcesResult {
             resources,
             next_cursor: None,
         })
@@ -146,8 +142,9 @@ impl ServerHandler for MCPForgeServer {
         use crate::resources::get_available_resources;
 
         let resources = get_available_resources();
-        
-        let resource = resources.values()
+
+        let resource = resources
+            .values()
             .find(|r| r.uri == request.uri)
             .ok_or_else(|| ErrorData {
                 code: ErrorCode(-32602),
@@ -167,25 +164,33 @@ impl ServerHandler for MCPForgeServer {
     ) -> Result<ListPromptsResult, ErrorData> {
         use crate::prompts::get_available_prompts;
 
-        let prompts = get_available_prompts().into_values().map(|prompt| Prompt {
+        let prompts = get_available_prompts()
+            .into_values()
+            .map(|prompt| Prompt {
                 name: prompt.name.clone(),
                 title: Some(prompt.name.clone()),
                 description: Some(prompt.description),
                 arguments: if prompt.arguments.is_empty() {
                     None
                 } else {
-                    Some(prompt.arguments.into_iter().map(|arg| PromptArgument {
-                        name: arg.name,
-                        title: None,
-                        description: Some(arg.description),
-                        required: Some(arg.required),
-                    }).collect())
+                    Some(
+                        prompt
+                            .arguments
+                            .into_iter()
+                            .map(|arg| PromptArgument {
+                                name: arg.name,
+                                title: None,
+                                description: Some(arg.description),
+                                required: Some(arg.required),
+                            })
+                            .collect(),
+                    )
                 },
                 icons: None,
             })
             .collect();
 
-        Ok(ListPromptsResult { 
+        Ok(ListPromptsResult {
             prompts,
             next_cursor: None,
         })
@@ -198,21 +203,18 @@ impl ServerHandler for MCPForgeServer {
     ) -> Result<GetPromptResult, ErrorData> {
         use crate::prompts::get_prompt;
 
-        let prompt = get_prompt(&request.name)
-            .ok_or_else(|| ErrorData {
-                code: ErrorCode(-32602),
-                message: Cow::Borrowed("Prompt not found"),
-                data: Some(serde_json::Value::String(request.name.clone())),
-            })?;
+        let prompt = get_prompt(&request.name).ok_or_else(|| ErrorData {
+            code: ErrorCode(-32602),
+            message: Cow::Borrowed("Prompt not found"),
+            data: Some(serde_json::Value::String(request.name.clone())),
+        })?;
 
-        let messages = vec![
-            PromptMessage::new_text(
-                PromptMessageRole::User,
-                prompt.template,
-            ),
-        ];
+        let messages = vec![PromptMessage::new_text(
+            PromptMessageRole::User,
+            prompt.template,
+        )];
 
-        Ok(GetPromptResult { 
+        Ok(GetPromptResult {
             description: Some(prompt.description),
             messages,
         })

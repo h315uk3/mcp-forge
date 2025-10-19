@@ -21,6 +21,20 @@ cargo run
 
 ## Usage with Claude CLI
 
+### Add to Claude Desktop
+
+```bash
+# Build release binary
+cargo build --release
+
+# Add MCP server to Claude Desktop configuration
+claude mcp add mcp-forge ./target/release/mcp-forge
+```
+
+### Using Tools and Prompts
+
+Once added to Claude Desktop, use the following commands:
+
 ```bash
 # Create a new project
 /mcp-forge:generate-project my_server "A data processing MCP server"
@@ -73,7 +87,7 @@ src/
 └── lib.rs            # Library root
 
 templates/            # 10 Rust code templates
-Cargo.toml            # Dependencies (Rust 1.89.0+, Tokio 1.48, rmcp 0.8.1)
+Cargo.toml            # Dependencies (Rust 1.90+, Edition 2024, rmcp 0.8.1)
 ```
 
 ## Development
@@ -121,9 +135,8 @@ npx @modelcontextprotocol/inspector cargo run
 
 ## Requirements
 
-- Rust 1.89.0+
-- Tokio 1.48+
-- rmcp 0.8.1 (official SDK)
+- Rust 1.90+ (Edition 2024)
+- rmcp 0.8.1 (official Rust SDK)
 
 ## Quality Metrics
 
