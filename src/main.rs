@@ -2,7 +2,7 @@ use anyhow::Result;
 use mcp_forge::MCPForgeServer;
 use rmcp::ServiceExt;
 use std::env;
-use tracing_subscriber::{self, EnvFilter};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
