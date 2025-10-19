@@ -1,0 +1,48 @@
+name: Auto Merge for Owner
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: ["Rust"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'h315uk3' || github.event_name == 'workflow_run'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Auto merge PR from owner
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number || context.payload.pull_request.number
+            });
+            
+            if (pr.user.login === 'h315uk3' && pr.draft === false) {
+              console.log(`Auto merging PR #${pr.number} from owner`);
+              
+              try {
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  merge_method: 'squash',
+                  commit_title: pr.title,
+                  commit_message: pr.body || ''
+                });
+                console.log('PR merged successfully');
+              } catch (error) {
+                console.log(`Merge failed: ${error.message}`);
+              }
+            }
